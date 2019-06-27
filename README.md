@@ -19,10 +19,13 @@ mv move-to-next-monitor /somewhere/in/your/$PATH
 
 ```
 # Xubuntu 18.04
-sudo apt install xdotool wmctrl
+sudo apt install xdotool wmctrl x11-xserver-utils
 
 # Xubuntu 16.04
-sudo apt-get install xdotool
+sudo apt-get install xdotool x11-xserver-utils
+
+# Debian 9.x (Stretch)
+sudo apt-get install xdotool x11-xserver-utils
 ```
 
 ## Code of Conduct
