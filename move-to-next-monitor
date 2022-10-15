@@ -53,8 +53,8 @@ wmctrl -ir "$window_id" -b remove,maximized_vert,maximized_horz
 # Subtract any offsets caused by panels or window decorations
 x_offset=$(xwininfo -id "$window_id" | awk '/Relative upper-left X:/ { print $4 }')
 y_offset=$(xwininfo -id "$window_id" | awk '/Relative upper-left Y:/ { print $4 }')
-x=$(( x - x_offset))
-y=$(( y - y_offset))
+x=$((x - x_offset))
+y=$((y - y_offset))
 
 # Compute new X position
 new_x=$((x + ${display_width[display_index]}))
@@ -64,7 +64,7 @@ new_y=$((y + display_height))
 # If we would move off the right-most monitor, we set it to the left one.
 # We also respect the window's width here: moving a window partly off a monitor won't happen
 width=$(xdotool getwindowgeometry "$window_id" | awk '/Geometry:/ { print $2 }'|cut -d"x" -f1)
-if [ "$((( new_x + width / 2)*display_index))" -gt "$screen_width" ]; then
+if [ "$(((new_x + width / 2)*display_index))" -gt "$screen_width" ]; then
     new_x=$((new_x - screen_width))
 elif [ "$(( new_x + width))" -gt "$screen_width" ]; then
     new_x=$((new_x - (new_x + width - screen_width)))
