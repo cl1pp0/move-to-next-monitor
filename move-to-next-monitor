@@ -24,15 +24,14 @@ read -r display_width[0] display_height[0] <<< $(xrandr | sed -n -E 's/^.* conne
 read -r display_width[1] display_height[1] <<< $(xrandr | sed -n -E 's/^.* connected ([0-9]+)x([0-9]+)\+'"${display_width[0]}"'\+0.*$/\1 \2/p')
 display_index=0
 
+# Get ID of active window
 window_id=$(xdotool getactivewindow)
 
 # Read window position
 read -r x y <<< $(xwininfo -id "$window_id" | awk '/Absolute upper-left X:/ { x = $4 }; /Absolute upper-left Y:/ { y = $4 }; END { print x, y }')
 
 # Evaluate on which display the window is
-if [ "$x" -ge "${display_width[0]}" ]; then
-    display_index=1
-fi
+if [ "$x" -ge "${display_width[0]}" ]; then display_index=1; fi
 
 # Remember if it was maximized.
 read -r horz_maxed vert_maxed <<< $(xprop -id "$window_id" _NET_WM_STATE | awk '{if (/MAXIMIZED_HORZ/) horz = 1; if (/MAXIMIZED_VERT/) vert = 1}; END {print horz, vert}')
@@ -63,14 +62,10 @@ if [ "$((new_y + height / 2))" -gt "$screen_height" ]; then
 fi
 
 # Don't move off the left side.
-if [ "$new_x" -lt 0 ]; then
-    new_x=0
-fi
+if [ "$new_x" -lt 0 ]; then new_x=0; fi
 
 # Don't move off the bottom
-if [ "$new_y" -lt 0 ]; then
-    new_y=0
-fi
+if [ "$new_y" -lt 0 ]; then new_y=0; fi
 
 # Move the window
 xdotool windowmove "$window_id" "$new_x" "$new_y"
