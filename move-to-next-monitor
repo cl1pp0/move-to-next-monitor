@@ -12,9 +12,7 @@
 # the first command does not respect panel/decoration offsets and the second
 # will sometimes give a "-0-0" geometry. This is why we resort to "xwininfo".
 
-
-screen_width=$(xdpyinfo | awk '/dimensions:/ { print $2; exit }' | cut -d"x" -f1)
-screen_height=$(xdpyinfo | awk '/dimensions:/ { print $2; exit }' | cut -d"x" -f2)
+read -r screen_width screen_height <<< $(xdpyinfo | sed -n -E 's/^.*dimensions: +([0-9]+)x([0-9]+) +pixels.*$/\1 \2/p')
 
 # xdotool always seems to return dimension of first display, not of which the active window is on.
 # see https://github.com/jordansissel/xdotool/issues/31
@@ -22,21 +20,14 @@ screen_height=$(xdpyinfo | awk '/dimensions:/ { print $2; exit }' | cut -d"x" -f
 #display_height=$(xdotool getdisplaygeometry | cut -d" " -f2)
 
 # Workaround: Use xrandr for getting the monitor resolution -> other suggestions welcome
-#display_res[0]=$(xrandr | grep ' connected ' | sed -n 's/^.*[ ]connected[ ]primary[ ]\([0-9]*\)x\([0-9]*\).*/\1 \2/p')
-display_res[0]=$(xrandr | sed -n 's/^.* connected \([0-9]*\)x\([0-9]*\)+0+0.*$/\1 \2/p')
-display_width[0]=$(echo ${display_res[0]} | cut -d" " -f1)
-display_height[0]=$(echo ${display_res[0]} | cut -d" " -f2)
-
-display_res[1]=$(xrandr | sed -n 's/^.* connected \([0-9]*\)x\([0-9]*\)+'"${display_width[0]}"'+0.*$/\1 \2/p')
-display_width[1]=$(echo ${display_res[1]} | cut -d" " -f1)
-display_height[1]=$(echo ${display_res[1]} | cut -d" " -f2)
+read -r display_width[0] display_height[0] <<< $(xrandr | sed -n -E 's/^.* connected ([0-9]+)x([0-9]+)\+0\+0.*$/\1 \2/p')
+read -r display_width[1] display_height[1] <<< $(xrandr | sed -n -E 's/^.* connected ([0-9]+)x([0-9]+)\+'"${display_width[0]}"'\+0.*$/\1 \2/p')
 display_index=0
 
 window_id=$(xdotool getactivewindow)
 
 # Read window position
-x=$(xwininfo -id "$window_id" | awk '/Absolute upper-left X:/ { print $4 }')
-y=$(xwininfo -id "$window_id" | awk '/Absolute upper-left Y:/ { print $4 }')
+read -r x y <<< $(xwininfo -id "$window_id" | awk '/Absolute upper-left X:/ { x = $4 }; /Absolute upper-left Y:/ { y = $4 }; END { print x, y }')
 
 # Evaluate on which display the window is
 if [ "$x" -ge "${display_width[0]}" ]; then
@@ -44,33 +35,29 @@ if [ "$x" -ge "${display_width[0]}" ]; then
 fi
 
 # Remember if it was maximized.
-window_horz_maxed=$(xprop -id "$window_id" _NET_WM_STATE | grep '_NET_WM_STATE_MAXIMIZED_HORZ')
-window_vert_maxed=$(xprop -id "$window_id" _NET_WM_STATE | grep '_NET_WM_STATE_MAXIMIZED_VERT')
+read -r horz_maxed vert_maxed <<< $(xprop -id "$window_id" _NET_WM_STATE | awk '{if (/MAXIMIZED_HORZ/) horz = 1; if (/MAXIMIZED_VERT/) vert = 1}; END {print horz, vert}')
 
 # Un-maximize current window so that we can move it
 wmctrl -ir "$window_id" -b remove,maximized_vert,maximized_horz
 
 # Subtract any offsets caused by panels or window decorations
-x_offset=$(xwininfo -id "$window_id" | awk '/Relative upper-left X:/ { print $4 }')
-y_offset=$(xwininfo -id "$window_id" | awk '/Relative upper-left Y:/ { print $4 }')
-x=$(( x - x_offset))
-y=$(( y - y_offset))
+read -r x_offset y_offset <<< $(xwininfo -id "$window_id" | awk '/Relative upper-left X:/ { x = $4 }; /Relative upper-left Y:/ { y = $4 }; END { print x, y }')
+x=$((x - x_offset))
+y=$((y - y_offset))
 
-# Compute new X position
+# Compute new X and Y position
 new_x=$((x + ${display_width[display_index]}))
-# Compute new Y position
 new_y=$((y + display_height))
 
 # If we would move off the right-most monitor, we set it to the left one.
 # We also respect the window's width here: moving a window partly off a monitor won't happen
-width=$(xdotool getwindowgeometry "$window_id" | awk '/Geometry:/ { print $2 }'|cut -d"x" -f1)
-if [ "$((( new_x + width / 2)*display_index))" -gt "$screen_width" ]; then
+read -r width height <<< $(xdotool getwindowgeometry "$window_id" | sed -n -E 's/^.*Geometry: +([0-9]+)x([0-9]+).*$/\1 \2/p')
+if [ "$(((new_x + width / 2)*display_index))" -gt "$screen_width" ]; then
     new_x=$((new_x - screen_width))
-elif [ "$(( new_x + width))" -gt "$screen_width" ]; then
+elif [ "$((new_x + width))" -gt "$screen_width" ]; then
     new_x=$((new_x - (new_x + width - screen_width)))
 fi
 
-height=$(xdotool getwindowgeometry "$window_id" | awk '/Geometry:/ { print $2 }'|cut -d"x" -f2)
 if [ "$((new_y + height / 2))" -gt "$screen_height" ]; then
     new_y=$((new_y - screen_height))
 fi
@@ -89,10 +76,10 @@ fi
 xdotool windowmove "$window_id" "$new_x" "$new_y"
 
 # Maximize window again, if it was before
-if [ -n "${window_horz_maxed}" ] && [ -n "${window_vert_maxed}" ]; then
+if [ -n "${horz_maxed}" ] && [ -n "${vert_maxed}" ]; then
     wmctrl -ir "$window_id" -b add,maximized_vert,maximized_horz
-elif [ -n  "${window_horz_maxed}" ]; then
+elif [ -n  "${horz_maxed}" ]; then
     wmctrl -ir "$window_id" -b add,maximized_horz
-elif [ -n  "${window_vert_maxed}" ]; then
+elif [ -n  "${vert_maxed}" ]; then
     wmctrl -ir "$window_id" -b add,maximized_vert
 fi
